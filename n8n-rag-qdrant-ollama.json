@@ -1,0 +1,653 @@
+{
+  "name": "PRIVATE-RAG",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerOn": "folder",
+        "path": "/data/shared/rag-files/pending/",
+        "events": [
+          "add"
+        ],
+        "options": {
+          "usePolling": true
+        }
+      },
+      "type": "n8n-nodes-base.localFileTrigger",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        -80
+      ],
+      "id": "f598bc82-d21e-45fa-9725-593a3e7f8a07",
+      "name": "Local File Trigger"
+    },
+    {
+      "parameters": {
+        "fileSelector": "={{ $json.path }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        -16,
+        -80
+      ],
+      "id": "cb14cf45-365f-4c15-be00-6d5613b8ca2a",
+      "name": "Read/Write Files from Disk"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://docling:5001/v1/convert/file",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "files",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "image_export_mode",
+              "value": "referenced"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        192,
+        -80
+      ],
+      "id": "d4fd11c2-5d96-4f54-a443-371eb78b3ef1",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and extract image names from md_content\nfor (const item of $input.all()) {\n  const mdContent = item.json.document?.md_content || '';\n  const imageNames = [];\n  \n  // Regex to match markdown image syntax: ![alt](image_name.png)\n  // This captures the filename part in parentheses\n  const imageRegex = /!\\[.*?\\]\\((.*?)\\)/g;\n  \n  let match;\n  while ((match = imageRegex.exec(mdContent)) !== null) {\n    // match[1] contains the image filename\n    imageNames.push(match[1]);\n  }\n  \n  // Add the array of image names to the item\n  item.json.imageNames = imageNames;\n}\n\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        304
+      ],
+      "id": "48ab73b5-18a4-4682-b1c6-cae72550d118",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "imageNames",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        880,
+        304
+      ],
+      "id": "0423ecc7-750e-484a-bc9c-b111ee47216f",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "executeOnce": false,
+        "command": "=mv /data/shared/docling-scratch/{{ $json.imageNames }} /data/shared/extracted-images/"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1088,
+        304
+      ],
+      "id": "d1eb41e4-5054-4f11-83b6-36d6cc9d20cd",
+      "name": "Execute Command"
+    },
+    {
+      "parameters": {
+        "height": 288,
+        "width": 896,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        592,
+        208
+      ],
+      "typeVersion": 1,
+      "id": "142c4fc0-0597-4074-8c82-adfaa1dd5667",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "height": 352,
+        "width": 688
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -288,
+        -240
+      ],
+      "typeVersion": 1,
+      "id": "1e504916-a32d-4731-9d9f-224cf7faecc8",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "multimodal-rag",
+          "mode": "list",
+          "cachedResultName": "multimodal-rag"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        688,
+        -384
+      ],
+      "id": "148c6281-2af3-4371-9c53-e1e74a895e9c",
+      "name": "Qdrant Vector Store",
+      "credentials": {
+        "qdrantApi": {
+          "id": "sFfERYppMeBnFNeA",
+          "name": "Local QdrantApi database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "qwen3-embedding:0.6b"
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOllama",
+      "typeVersion": 1,
+      "position": [
+        688,
+        -80
+      ],
+      "id": "b2fbc34e-f179-42ad-8519-3cfae1df2a94",
+      "name": "Embeddings Ollama",
+      "credentials": {
+        "ollamaApi": {
+          "id": "xHuYe0MDGOs9IpBW",
+          "name": "Local Ollama service"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "textSplittingMode": "custom",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        864,
+        -208
+      ],
+      "id": "06f7dbf1-0b6c-4331-bc4e-12521e1cf6c2",
+      "name": "Default Data Loader"
+    },
+    {
+      "parameters": {
+        "chunkSize": 1500,
+        "chunkOverlap": 300,
+        "options": {
+          "splitCode": "markdown"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        864,
+        -16
+      ],
+      "id": "d520d339-6c7a-415c-a02a-4efe2582cd4d",
+      "name": "Recursive Character Text Splitter"
+    },
+    {
+      "parameters": {
+        "height": 624,
+        "width": 544,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        592,
+        -464
+      ],
+      "typeVersion": 1,
+      "id": "64d8ade9-7696-4e37-9bcc-7125afd64f39",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -208,
+        256
+      ],
+      "id": "0ea03fd0-e214-43fe-b7a9-c9994f78907f",
+      "name": "When chat message received",
+      "webhookId": "7f985736-0d79-4fb7-af49-2380bef33c46"
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are a helpful assistant - \n\nYou are an assistant for question-answering tasks. Use the following pieces of retrieved context to answer the question.\nIf you don't know the answer, just say that you don't know, don't try to make up an answer.\n\nyou must use the qdrant vactor store to retrieve information\n\nyou must output images in markdown format using the url provided in the retrieved results"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        0,
+        256
+      ],
+      "id": "faca083e-2816-41ab-967a-c097e4e2c586",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "llama3.2:latest",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        -160,
+        512
+      ],
+      "id": "2c981a2b-f7bc-4b1b-b4b9-b60f02a1d710",
+      "name": "Ollama Chat Model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "xHuYe0MDGOs9IpBW",
+          "name": "Local Ollama service"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "use this to fetch information from the knowledgebase",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "multimodal-rag",
+          "mode": "list",
+          "cachedResultName": "multimodal-rag"
+        },
+        "topK": 5,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        192,
+        480
+      ],
+      "id": "bc4d7d18-4d13-4d18-9ad4-2c9d8dde3931",
+      "name": "Qdrant Vector Store1",
+      "credentials": {
+        "qdrantApi": {
+          "id": "sFfERYppMeBnFNeA",
+          "name": "Local QdrantApi database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "qwen3-embedding:0.6b"
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOllama",
+      "typeVersion": 1,
+      "position": [
+        192,
+        720
+      ],
+      "id": "33c70927-e6c9-490f-b02c-a692769e0a90",
+      "name": "Embeddings Ollama1",
+      "credentials": {
+        "ollamaApi": {
+          "id": "xHuYe0MDGOs9IpBW",
+          "name": "Local Ollama service"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\nfor (const item of $input.all()) {\n\n  // Base URL for images\nconst baseUrl = \"http://localhost:8080/\";\n\n// Loop over input items and inject full URLs into md_content\nfor (const item of $input.all()) {\n  if (item.json.document && item.json.document.md_content) {\n    // Replace relative image paths with full URLS\n    // Pattern matches: ![AltText](image_filename.png)\n    item.json.document.md_content =\n      item.json.document.md_content.replace(\n        /!\\[([^\\]]*)\\]\\(([^\\)]+)\\)/g,\n        (match, altText, imagePath) => {\n          // Only add base URL if it's not already a full URL\n          if (!imagePath.startsWith('http://') &&\n              !imagePath.startsWith('https://')) {\n            return `![${altText}](${baseUrl}${imagePath})`;\n          }\n          return match;\n        }\n      );\n  }\n}\nreturn $input.all();\n  \n}\n\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        -80
+      ],
+      "id": "dd553c90-7d90-4f71-ac7a-ea30d3e00e4d",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "http://qdrant:6333/collections/multimodal-rag",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        160,
+        -464
+      ],
+      "id": "94817dde-49f1-47c6-85d8-951f07ec5435",
+      "name": "delete"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "http://qdrant:6333/collections/multimodal-rag",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"vectors\": {\n    \"size\": 1024,\n    \"distance\": \"Cosine\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -112,
+        -464
+      ],
+      "id": "67b9d270-a116-49c3-887e-a5e492ba5b55",
+      "name": "put"
+    },
+    {
+      "parameters": {
+        "content": "**QDRANT : put and delete collection**  \n\n*put ( create ) and delete by using the collection name in -> URL field\nlocal qdrant link = [click](http://localhost:6333/dashboard#/collections)*",
+        "height": 96,
+        "width": 560
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -176,
+        -608
+      ],
+      "typeVersion": 1,
+      "id": "3c5fd6d7-ac1f-4dd0-92d3-e00f6e6419e5",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 208,
+        "width": 288
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        96,
+        -496
+      ],
+      "typeVersion": 1,
+      "id": "9ae6bb7f-a227-42db-a270-6237c55d444b",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 208,
+        "width": 256
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -176,
+        -496
+      ],
+      "typeVersion": 1,
+      "id": "5e46ce65-3465-4445-86ff-addb29dc308c",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        1296,
+        304
+      ],
+      "id": "7648cd9e-b7a8-4ef2-b691-c4de61e88df3",
+      "name": "Limit"
+    },
+    {
+      "parameters": {
+        "model": "qwen/qwen3-8b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        0,
+        560
+      ],
+      "id": "3cda3e5e-31e8-455d-934b-eb01624c5be0",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "TLlOS9rRjRwLKU0R",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## CHAT retieve data from QDRANT",
+        "height": 736,
+        "width": 768,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -288,
+        144
+      ],
+      "typeVersion": 1,
+      "id": "fa9817e7-1963-4c07-9aea-425310369a22",
+      "name": "Sticky Note6"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Local File Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Execute Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Ollama": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Qdrant Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Qdrant Vector Store",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recursive Character Text Splitter": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Default Data Loader",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        []
+      ]
+    },
+    "Qdrant Vector Store1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings Ollama1": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Qdrant Vector Store1",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        []
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Qdrant Vector Store",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Command": {
+      "main": [
+        [
+          {
+            "node": "Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit": {
+      "main": [
+        []
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "8d3eb254-0283-4f8c-a15c-85a4f49ffb50",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5649e0efee07a4524530faaa65dbce5cbc069628d7873d1921f45b70a1eeb00d"
+  },
+  "id": "8Aq7bMLpKENDBewRgw5kc",
+  "tags": []
+}
