@@ -2,4 +2,4 @@
 
 rag pdf text, image from local folder  /  qdrant embedding  /  ai ollama
 
-กำลังปรับปรุงย้าย docker ใหม่ // 
+
